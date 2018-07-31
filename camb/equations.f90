@@ -16,6 +16,7 @@
     !            optimized neutrino sampling, and reorganised neutrino integration functions
     ! Feb 2013: fixed various issues with accuracy at larger neutrino masses
     ! Mar 2014: fixes for tensors with massive neutrinos
+!MODIFIED July 2018 for phdm
 
     module LambdaGeneral
     use precision
@@ -53,8 +54,11 @@
     use precision
     use ModelParams
     real(dl)  GetOmegak
-    GetOmegak = 1 - (CP%omegab+CP%omegac+CP%omegav+CP%omegan)
 
+!!MODIFIED
+    !GetOmegak = 1 - (CP%omegab+CP%omegac+CP%omegav+CP%omegan)
+    GetOmegak = 1 - (CP%omegab+CP%omegac+CP%omegav+CP%omegan+CP%omegas) !include omegas
+!!!!!!!!!!!!!!!!
     end function GetOmegak
 
 
@@ -81,7 +85,11 @@
     a2=a**2
 
     !  8*pi*G*rho*a**4.
-    grhoa2=grhok*a2+(grhoc+grhob)*a+grhog+grhornomass
+!MODIFIED
+!    grhoa2=grhok*a2+(grhoc+grhob)*a+grhog+grhornomass
+    grhoa2=grhok*a2+grhob*a+grhog+grhornomass+(grhoc+grhos)*a**(4-io_phdm)
+!!!!!!!!!!
+
     if (w_lam == -1._dl) then
         grhoa2=grhoa2+grhov*a2**2
     else
@@ -145,7 +153,9 @@
         integer w_ix !Index of two quintessence equations
         integer r_ix !Index of the massless neutrino hierarchy
         integer g_ix !Index of the photon neutrino hierarchy
-
+!MODIFIED
+        integer ste  !! ADDED for phdm
+!!!
         integer q_ix !index into q_evolve array that gives the value q
         logical TransferOnly
 
@@ -530,6 +540,15 @@
     else
         EV%w_ix=0
     end if
+!    write(*,*) maxeq, neq, EV%w_ix, EV%r_ix, EV%g_ix
+!    write(*,*) (EV%lmaxg+1),(EV%lmaxnr+1),EV%lmaxgpol
+
+!!MODIFIED
+!Added section for dark radiation
+    EV%ste=neq+1
+    neq=neq+EV%lmaxnr+1
+    maxeq=maxeq+EV%lmaxnr+1
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
     !Massive neutrinos
     if (CP%Num_Nu_massive /= 0) then
@@ -1201,6 +1220,10 @@
     real(dl) sources(CTransScal%NumSources)
     real(dl) ISW
 
+!!MODIFIED: addition variables
+    real(dl) pis,clxs,qs,grhos_t,pisdot,clxsdot,qsdot
+!!!!!!!!!!!!!!!!!!!!
+
     yprime = 0
     call derivs(EV,EV%ScalEqsToPropagate,tau,y,yprime)
 
@@ -1227,13 +1250,30 @@
 
     !  Compute expansion rate from: grho 8*pi*rho*a**2
 
+!!MODIFIED: additional equations
+   clxs = y(EV%ste)
+   qs = y(EV%ste+1)
+   qsdot = yprime(EV%ste+1)
+   pis = y(EV%ste+2)
+   pisdot = yprime(EV%ste+2)
+!!!!!!!!!!!!!!!!!!!!
+
     grhob_t=grhob/a
-    grhoc_t=grhoc/a
+!MODIFIED
+!    grhoc_t=grhoc/a
+    grhoc_t=grhoc*a**(2-io_phdm) !modified
+    grhos_t=grhos*a**(2-io_phdm) !new equation
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
     grhor_t=grhornomass/a2
     grhog_t=grhog/a2
     grhov_t=grhov*a**(-1-3*w_lam)
     grho=grhob_t+grhoc_t+grhor_t+grhog_t+grhov_t
     gpres=(grhog_t+grhor_t)/3+grhov_t*w_lam
+!! MODIFIED: add to above
+     grho = grho + grhos_t
+     gpres = gpres + grhos_t/3.0
+!!!!!!!!!!!!!!!!!!!!
 
     !  8*pi*a*a*SUM[rho_i*clx_i] add radiation later
     dgrho=grhob_t*clxb+grhoc_t*clxc
@@ -1242,6 +1282,13 @@
     dgq=grhob_t*vb
 
     dgpi=0
+
+!!MODIFIED
+    dgrho = dgrho + grhos_t*clxs
+    dgq = dgq + grhos_t*qs
+    dgpi = dgpi + grhos_t*pis
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
     dgpi_diff = 0
     pidot_sum = 0
 
@@ -1339,6 +1386,9 @@
     end if
 
     pidot_sum =  pidot_sum + grhog_t*pigdot + grhor_t*pirdot
+!! MODIFIED: add to above
+    pidot_sum = pidot_sum + grhos_t*pisdot
+!!!!!!!!!!!!!!!!!!!
     diff_rhopi = pidot_sum - (4*dgpi+ dgpi_diff )*adotoa
 
     !Maple's fortran output - see scal_eqs.map
@@ -1552,9 +1602,16 @@
     real(dl) k,k2
     real(dl) a,a2, iqg, rhomass,a_massive, ep
     integer l,i, nu_i, j, ind
+!!MODIFIED: add parameters
+!    integer, parameter :: i_clxg=1,i_clxr=2,i_clxc=3, i_clxb=4, &
+!        i_qg=5,i_qr=6,i_vb=7,i_pir=8, i_eta=9, i_aj3r=10,i_clxq=11,i_vq=12
+!    integer, parameter :: i_max = i_vq
     integer, parameter :: i_clxg=1,i_clxr=2,i_clxc=3, i_clxb=4, &
-        i_qg=5,i_qr=6,i_vb=7,i_pir=8, i_eta=9, i_aj3r=10,i_clxq=11,i_vq=12
-    integer, parameter :: i_max = i_vq
+              i_qg=5,i_qr=6,i_vb=7,i_pir=8, i_eta=9, &
+              i_aj3r=10,i_clxq=11,i_vq=12,i_clxs=13,i_qs=14,i_pis=15!,i_vc=16,i_pic=17
+    integer, parameter :: i_max = i_pis
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
     real(dl) initv(6,1:i_max), initvec(1:i_max)
 
     nullify(EV%OutputTransfer) !Should not be needed, but avoids issues in ifort 14
@@ -1609,9 +1666,13 @@
     rhomass =  sum(grhormass(1:CP%Nu_mass_eigenstates))
     grhonu=rhomass+grhornomass
 
-    om = (grhob+grhoc)/sqrt(3*(grhog+grhonu))
+!MODIFIED
+!    om = (grhob+grhoc)/sqrt(3*(grhog+grhonu))
+    om = (grhob+grhoc)/sqrt(3*(grhog+grhonu+grhos))
     omtau=om*tau
-    Rv=grhonu/(grhonu+grhog)
+!    Rv=grhonu/(grhonu+grhog)
+    Rv=grhonu/(grhonu+grhog+grhos)!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
     Rg = 1-Rv
     Rc=CP%omegac/(CP%omegac+CP%omegab)
@@ -1639,6 +1700,12 @@
     initv(1,i_pir)=chi*4._dl/3*x2/Rp15*(1+omtau/4*(4*Rv-5)/(2*Rv+15))
     initv(1,i_aj3r)=chi*4/21._dl/Rp15*x3
     initv(1,i_eta)=-chi*2*EV%Kf(1)*(1 - x2/12*(-10._dl/Rp15 + EV%Kf(1)))
+
+!!MODIFIED: new
+    initv(1,i_clxs)=0
+    initv(1,i_qs)=0
+    initv(1,i_pis)=0
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
     if (CP%Scalar_initial_condition/= initial_adiabatic) then
         !CDM isocurvature
@@ -1707,6 +1774,16 @@
 
     !  CDM
     y(3)=InitVec(i_clxc)
+
+!!MODIFIED:new section
+    !  Dark radiation
+    y(EV%ste)=InitVec(i_clxs)
+    y(EV%ste+1)=InitVec(i_qs)
+    y(EV%ste+2)=InitVec(i_pis)
+    do l=3,EV%lmaxnr
+        y(l+EV%ste) = 0.0d0
+    end do
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
     !  Baryons
     y(4)=InitVec(i_clxb)
@@ -1949,6 +2026,10 @@
     !non-flat vars
     real(dl) cothxor !1/tau in flat case
 
+!!MODIFIED: additional parameters
+    real(dl) pis,clxs,qs,grhos_t,pisdot,clxsdot,qsdot
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
     k=EV%k_buf
     k2=EV%k2_buf
 
@@ -1959,15 +2040,25 @@
 
     !  CDM variables
     clxc=ay(3)
+!!!MODIFIED
+    clxs = ay(EV%ste)
+    qs = ay(EV%ste+1)
+    qsdot = ayprime(EV%ste+1)
+    pis = ay(EV%ste+2)
+    pisdot = ayprime(EV%ste+2)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
     !  Baryon variables
     clxb=ay(4)
     vb=ay(5)
 
     !  Compute expansion rate from: grho 8*pi*rho*a**2
-
+!MODIFIED
     grhob_t=grhob/a
-    grhoc_t=grhoc/a
+!    grhoc_t=grhoc/a
+    grhoc_t=grhoc*a**(2-io_phdm) !ADDED
+    grhos_t=grhos*a**(2-io_phdm) !ADDED
+!!!!!!!!!!!!
     grhor_t=grhornomass/a2
     grhog_t=grhog/a2
     if (w_lam==-1._dl) then
@@ -1996,7 +2087,9 @@
         call MassiveNuVars(EV,ay,a,grho_matter,gpres,dgrho_matter,dgq, wnu_arr)
     end if
 
-    grho = grho_matter+grhor_t+grhog_t+grhov_t
+!MODIFIED
+    grho = grho_matter+grhor_t+grhog_t+grhov_t + grhos_t !add grhos_t
+!!!!!!!!
 
     if (CP%flat) then
         adotoa=sqrt(grho/3)
@@ -2006,7 +2099,10 @@
         cothxor=1._dl/tanfunc(tau/CP%r)/CP%r
     end if
 
+!MODIFIED
     dgrho = dgrho_matter
+    dgrho = dgrho_matter + clxs*grhos_t !ADDED
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
     if (w_lam /= -1 .and. w_Perturb) then
         clxq=ay(EV%w_ix)
@@ -2080,12 +2176,14 @@
         ayprime(EV%w_ix+1) = -adotoa*(1-3*cs2_lam)*vq + k*cs2_lam*clxq/(1+w_lam)
     end if
 
+!MODIFIED
     if (associated(EV%OutputTransfer)) then
         EV%OutputTransfer(Transfer_kh) = k/(CP%h0/100._dl)
         EV%OutputTransfer(Transfer_cdm) = clxc
         EV%OutputTransfer(Transfer_b) = clxb
         EV%OutputTransfer(Transfer_g) = clxg
         EV%OutputTransfer(Transfer_r) = clxr
+        EV%OutputTransfer(Transfer_s) = clxs      !! ADDED
         clxnu_all=0
         dgpi  = grhor_t*pir + grhog_t*pig
         if (CP%Num_Nu_Massive /= 0) then
@@ -2101,10 +2199,28 @@
         EV%OutputTransfer(Transfer_Newt_vel_baryon) = -k*(vb + sigma)/adotoa
         EV%OutputTransfer(Transfer_vel_baryon_cdm) = vb
     end if
+!!!!!!!!!!
 
     !  CDM equation of motion
     clxcdot=-k*z
     ayprime(3)=clxcdot
+
+!MODIFIED: new section
+    !dark radiation equations of motion
+    clxsdot=-k*(4._dl/3._dl*z+qs)-adotoa/(1._dl+CP%alpha_phdm)*(clxs-clxc)
+    ayprime(EV%ste)=clxsdot
+    qsdot=k*(clxs-2._dl*pis)/3._dl-adotoa/(1._dl+CP%alpha_phdm)*qs
+    ayprime(EV%ste+1)=qsdot
+    pisdot=k*(0.4_dl*qs-0.6_dl*ay(EV%ste+3)+8._dl/15._dl*sigma)-adotoa/(1._dl+CP%alpha_phdm)*pis
+    ayprime(EV%ste+2)=pisdot
+    do l=3,EV%lmaxnr-1
+       ayprime(l+EV%ste)=k*denl(l)*(l*ay(l+EV%ste-1)-(l+1)*ay(l+EV%ste+1))-adotoa/(1._dl+CP%alpha_phdm)*ay(l+EV%ste)
+    end do
+  !Truncate the sterile neutrino expansion
+    ayprime(EV%lmaxnr+EV%ste)=k*ay(EV%lmaxnr+EV%ste-1)-(EV%lmaxnr+1)/tau*ay(EV%lmaxnr+EV%ste)-&
+         adotoa/(1._dl+CP%alpha_phdm)*ay(EV%lmaxnr+EV%ste)
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
     !  Baryon equation of motion.
     clxbdot=-k*(z+vb)

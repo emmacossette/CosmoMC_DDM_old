@@ -2,6 +2,7 @@
     !     by Antony Lewis (http://cosmologist.info/) and Anthony Challinor
     !     See readme.html for documentation. This is a sample driver routine that reads
     !     in one set of parameters and produdes the corresponding output.
+!MODIFIED for phdm July 2018
 
     program driver
     use IniFile
@@ -103,6 +104,10 @@
     call DarkEnergy_ReadParams(DefIni)
 
     P%h0     = Ini_Read_Double('hubble')
+
+!!MODIFIED
+    P%alpha_phdm = Ini_Read_Double('alpha_phdm') !Additional parameter
+!!!!!!
 
     if (Ini_Read_Logical('use_physical',.false.)) then
         P%omegab = Ini_Read_Double('ombh2')/(P%H0/100)**2

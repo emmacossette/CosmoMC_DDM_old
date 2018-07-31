@@ -35,7 +35,7 @@
     implicit none
     public
 
-    character(LEN=*), parameter :: version = 'Nov16'
+    character(LEN=*), parameter :: version = 'May16'
 
     integer :: FeedbackLevel = 0 !if >0 print out useful information about the model
 
@@ -111,6 +111,9 @@
         !Max_l and Max_eta_k are set to the tensor variables if only tensors requested
 
         real(dl)  :: omegab, omegac, omegav, omegan
+!MODIFIED
+        real(dl)  :: omegas, alpha_phdm !!ADDED
+!!!!
         !Omega baryon, CDM, Lambda and massive neutrino
         real(dl)  :: H0,TCMB,yhe,Num_Nu_massless
         integer   :: Num_Nu_massive !sum of Nu_mass_numbers below
@@ -175,6 +178,9 @@
     !     adotrad - a(tau) in radiation era
 
     real(dl) grhom,grhog,grhor,grhob,grhoc,grhov,grhornomass,grhok
+!MODIFIED
+    real(dl) grhos, io_phdm !! ADDED
+!!!
     real(dl) taurst,dtaurec,taurend, tau_maxvis,adotrad
 
     !Neutrinos
@@ -375,6 +381,10 @@
     grhob=grhom*CP%omegab
     grhov=grhom*CP%omegav
     grhok=grhom*CP%omegak
+!MODIFIED
+    grhos=grhom*CP%omegas !! ADDED
+    io_phdm=(3._dl+4._dl*CP%alpha_phdm)/(1._dl+CP%alpha_phdm) !! ADDED
+!!!!
     !  adotrad gives the relation a(tau) in the radiation era:
     adotrad = sqrt((grhog+grhornomass+sum(grhormass(1:CP%Nu_mass_eigenstates)))/3)
 
@@ -1439,9 +1449,6 @@
     real(dl), parameter  :: zeta5  = 1.0369277551433699263313_dl
     real(dl), parameter  :: zeta7  = 1.0083492773819228268397_dl
 
-    ! zeta3*3/2/pi^2*4/11*((k_B*COBE_CMBTemp/hbar/c)^3* 8*pi*G/3/(100*km/s/megaparsec)^2/(c^2/eV)
-    real(dl), parameter :: neutrino_mass_fac= 94.07_dl !converts omnuh2 into sum m_nu in eV
-
     integer, parameter  :: nrhopn=2000
     real(dl), parameter :: am_min = 0.01_dl  !0.02_dl
     !smallest a*m_nu to integrate distribution function rather than using series
@@ -1463,26 +1470,15 @@
     integer nqmax !actual number of q modes evolves
 
     public const,Nu_Init,Nu_background, Nu_rho, Nu_drho,  nqmax0, nqmax, &
-        nu_int_kernel, nu_q, sum_mnu_for_m1, neutrino_mass_fac
+        nu_int_kernel, nu_q
     contains
     !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
-    subroutine sum_mnu_for_m1(summnu,dsummnu, m1, targ, sgn)
-    use constants
-    real(dl), intent(in) :: m1, targ, sgn
-    real(dl), intent(out) :: summnu, dsummnu
-    real(dl) :: m2,m3
-
-    m2 = sqrt(m1**2 + delta_mnu21)
-    m3 = sqrt(m1**2 + sgn*delta_mnu31)
-    summnu = m1 + m2 + m3 - targ
-    dsummnu = m1/m2+m1/m3 + 1
-
-    end subroutine sum_mnu_for_m1
-
     subroutine Nu_init
+
     !  Initialize interpolation tables for massive neutrinos.
     !  Use cubic splines interpolation of log rhonu and pnu vs. log a*m.
+
     integer i
     real(dl) dq,dlfdlq, q, am, rhonu,pnu
     real(dl) spline_data(nrhopn)
@@ -1721,18 +1717,31 @@
     use Errors
     implicit none
     public
+
+!MODIFIED
     integer, parameter :: Transfer_kh =1, Transfer_cdm=2,Transfer_b=3,Transfer_g=4, &
         Transfer_r=5, Transfer_nu = 6,  & !massless and massive neutrino
     Transfer_tot=7, Transfer_nonu=8, Transfer_tot_de=9,  &
-        ! total perturbations with and without neutrinos, with neutrinos+dark energy in the numerator
+!        ! total perturbations with and without neutrinos, with neutrinos+dark energy in the numerator
         Transfer_Weyl = 10, & ! the Weyl potential, for lensing and ISW
     Transfer_Newt_vel_cdm=11, Transfer_Newt_vel_baryon=12,   & ! -k v_Newtonian/H
-    Transfer_vel_baryon_cdm = 13 !relative velocity of baryons and CDM
+    Transfer_vel_baryon_cdm = 13, & !relative velocity of baryons and CDM
+    Transfer_s = 14          !! Additional transfer
 
-    integer, parameter :: Transfer_max = Transfer_vel_baryon_cdm
+
+!    integer, parameter :: Transfer_max = Transfer_vel_baryon_cdm
+    integer, parameter :: Transfer_max = Transfer_s !changed
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!    character(LEN=name_tag_len) :: Transfer_name_tags(Transfer_max-1) = &
+!        ['CDM     ', 'baryon  ', 'photon  ', 'nu      ', 'mass_nu ', 'total   ', &
+!        'no_nu   ', 'total_de', 'Weyl    ', 'v_CDM   ', 'v_b     ', 'v_b-v_c ']
+!Added tag:
     character(LEN=name_tag_len) :: Transfer_name_tags(Transfer_max-1) = &
         ['CDM     ', 'baryon  ', 'photon  ', 'nu      ', 'mass_nu ', 'total   ', &
-        'no_nu   ', 'total_de', 'Weyl    ', 'v_CDM   ', 'v_b     ', 'v_b-v_c ']
+        'no_nu   ', 'total_de', 'Weyl    ', 'v_CDM   ', 'v_b     ', 'v_b-v_c ', 'phdm    ']
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
     logical :: transfer_interp_matterpower  = .true. !output regular grid in log k
     !set to false to output calculated values for later interpolation
